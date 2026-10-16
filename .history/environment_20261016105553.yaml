@@ -1,0 +1,22 @@
+name: mujoco_policy_trans
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pytorch
+  - torchvision
+  - pytorch-cuda=11.8  # Change to cpuonly if running without GPU
+  - numpy
+  - scipy
+  - matplotlib
+  - scikit-learn
+  - pip
+  - pip:
+    - mujoco
+    - gymnasium
+    - gpytorch
+    - open3d
+    - opencv-python

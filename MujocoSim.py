@@ -7,17 +7,10 @@ import os
 import pinocchio as pin
 from pinocchio import RobotWrapper
 from scipy.spatial.transform import Rotation as R
-import rclpy
-from rclpy.node import Node
-from std_msgs.msg import Float64MultiArray
-from sensor_msgs.msg import JointState
-
 ASSETS_PATH = os.path.join(os.path.dirname(__file__), "assets")
 END_EFF_FRAME_ID = 19
-
-
 class FR3Sim:
-    def __init__(self, interface_type="torque", render=True, dt=0.001, xml_path=None):
+    def __init__(self, interface_type="torque", render=True, dt=0.001, xml_path=None, gravity=True):
         assert interface_type in ["torque"], "The interface should be torque"
         self.interface_type = interface_type
         if xml_path is not None:
@@ -30,8 +23,8 @@ class FR3Sim:
         self.data = mujoco.MjData(self.model)
         self.data.qpos[7:9] = 0.035
         self.dt = dt
-        _render_dt = 1 / 60
-        self.render_ds_ratio = max(1, _render_dt // dt)
+        _render_dt = 1.0 / 60.0
+        self.render_ds_ratio = max(1, int(round(_render_dt / dt)))
         if render:
             self.viewer = mujoco.viewer.launch_passive(self.model, self.data)
             self.render = True
@@ -43,6 +36,8 @@ class FR3Sim:
             self.render = False
         self.model.opt.gravity[2] = -9.81
         self.model.opt.timestep = dt
+        if not gravity:
+            self.model.opt.gravity[:] = [0.0, 0.0, 0.0]   
         self.step_counter = 0
         self.joint_names = [
             "joint1",
@@ -55,17 +50,7 @@ class FR3Sim:
         ]
         # Set the home pose (reset position) for the robot
         # Franka Emika Panda default home pose (ready position)
-        self.q0 = np.array(
-            [
-                0.0,
-                -1.515398,  # -45 deg
-                0.0,
-                -1.756194,  # -135 deg
-                0.0,
-                2.070796,  # 90 deg
-                0.785398,  # 45 deg
-            ]
-        )
+        self.q0 = np.array([0.0, -0.785398, 0.0, -2.356194, 0.0, 1.570796, 0.785398])
         # Simulate for some time to let the system stabilize
         self.reset(True)
         mujoco.mj_step(self.model, self.data)
@@ -82,23 +67,6 @@ class FR3Sim:
         urdf = os.path.join(ASSETS_PATH, "fr3.urdf")
         meshes_dir = os.path.join(ASSETS_PATH, "meshes")
         self.pin_model = RobotWrapper.BuildFromURDF(urdf, meshes_dir)
-        # ROS 2 setup
-        if not rclpy.ok():
-            rclpy.init()
-        self.ros_node = rclpy.create_node("fr3sim_torque_sender")
-        self.torque_pub = self.ros_node.create_publisher(
-            Float64MultiArray,
-            "/joint_impedance_example_controller/external_torque",
-            10,
-        )
-        # Joint state subscription
-        self.joint_state_sub = self.ros_node.create_subscription(
-            JointState, "/joint_states", self.joint_state_callback, 10
-        )
-        self.latest_joint_states = {}
-        # Assuming 'right_finger_site' is the site name
-        time.sleep(1)  # Allow time for the initial state to be set
-
     def forward_kinematics(self, q, update=True):
         """
         Compute the forward kinematics for the end-effector frame.
@@ -112,46 +80,6 @@ class FR3Sim:
             q, END_EFF_FRAME_ID, update_kinematics=update
         )
         return np.array(T_S_F)
-
-    def joint_state_callback(self, msg):
-        """
-        Callback to handle incoming joint states.
-        """
-        positions = list(msg.position[:7])
-        velocities = list(msg.velocity[:7])
-        efforts = list(msg.effort[:7])
-        names = list(msg.name[:7])  # Ensure we only take the first 7 names
-        # Swap the 2nd and 3rd elements (index 1 and 2) of the arrays
-        positions[1], positions[2] = positions[2], positions[1]
-        velocities[1], velocities[2] = velocities[2], velocities[1]
-        efforts[1], efforts[2] = efforts[2], efforts[1]
-        names[1], names[2] = names[2], names[1]
-        self.latest_joint_states = {
-            "names": names,
-            "positions": positions,
-            "velocities": velocities,
-            "efforts": efforts,
-        }
-
-    def get_latest_joint_states(self):
-        """
-        Returns the most recent joint states received from the /joint_states topic.
-        Returns:
-            dict: {'names', 'positions', 'velocities', 'efforts'}
-        """
-        return self.latest_joint_states
-
-    def send_torque_to_ros_node(self, torque):
-        """
-        Publishes a 7-DOF torque vector to the ROS 2 topic expected by the real Franka controller.
-        """
-        if len(torque) != 7:
-            raise ValueError("Torque command must be a 7-element vector.")
-        msg = Float64MultiArray()
-        msg.data = torque.tolist()
-        self.torque_pub.publish(msg)
-        rclpy.spin_once(self.ros_node, timeout_sec=0.001)
-
     def reset(self, active=True):
         self.set_weld_active("ball_weld", active)
         self.data.qpos[:7] = self.q0
@@ -159,18 +87,14 @@ class FR3Sim:
         mujoco.mj_step(self.model, self.data)
         if self.render and (self.step_counter % self.render_ds_ratio) == 0:
             self.viewer.sync()
-
     def get_state(self):
         return self.data.qpos[:7], self.data.qvel[:7]
-
     def get_joint_acceleration(self):
         return self.data.qacc[:7]
-
     def send_joint_torque(self, torques, finger_pos=None):
         self.tau_ff = torques
         self.latest_command_stamp = time.time()
         self.step(finger_pos)
-
     def step(self, finger_pos=None):
         tau = self.tau_ff
         self.actuator_tau = tau
@@ -183,15 +107,12 @@ class FR3Sim:
         mujoco.mj_step(self.model, self.data)
         if self.render and (self.step_counter % self.render_ds_ratio) == 0:
             self.viewer.sync()
-
     def get_gravity(self, q):
         g = self.pin_model.gravity(np.append(q, [0.0, 0.0]))
         return g[:7]
-
     def set_weld_active(self, name="ball_weld", active=True):
         eq_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_EQUALITY, name)
         self.data.eq_active[eq_id] = int(active)
-
     def get_dynamics(self, q, v):
         """
         Compute the joint-space inertia matrix M(q) and the nonlinear effects h(q, v) = C(q, v)*v + g(q).
@@ -207,11 +128,9 @@ class FR3Sim:
         M = self.pin_model.mass(q)
         h = self.pin_model.nle(q, v)
         return M, h
-
     def get_site_pose(self, site_name):
         """Get the world position of a specific site."""
         return self.data.site(site_name).xpos
-
     def get_site_id(self, site_name):
         """
         Get the ID of a specific site by its name.
@@ -221,7 +140,6 @@ class FR3Sim:
             int: Site ID.
         """
         return mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SITE, site_name)
-
     def get_body_id(self, body_name):
         """
         Get the ID of a specific body by its name.
@@ -231,14 +149,12 @@ class FR3Sim:
             int: Body ID.
         """
         return mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, body_name)
-
     def get_body_names(self):
         """Get a list of all body names in the model.
         Returns:
             list: List of body names.
         """
         return [self.model.body(i).name for i in range(self.model.nbody)]
-
     def get_body_mass(self, body_name):
         """
         Get the mass of a specific body by its name.
@@ -249,7 +165,6 @@ class FR3Sim:
         """
         body_id = self.get_body_id(body_name)
         return self.model.body_mass[body_id]
-
     def get_body_pose(self, body_name):
         """
         Get the pose of a specific body in the world frame.
@@ -265,7 +180,6 @@ class FR3Sim:
             np.array(pin.SE3(R.from_quat(quat).as_matrix(), T).homogeneous)[:3, :3],
             np.array(pin.SE3(R.from_quat(quat).as_matrix(), T).homogeneous)[:3, 3],
         )
-
     def compute_tau(self, q, v, ddq_des):
         """
         Compute the total torque command using inverse dynamics:
@@ -281,7 +195,6 @@ class FR3Sim:
         M, h = self.get_dynamics(q, v)
         tau = M @ ddq_des + h
         return tau[:7]
-
     def get_gravity_vector(self):
         """
         Get the gravity vector in the world frame.
@@ -289,22 +202,19 @@ class FR3Sim:
             np.ndarray: Gravity vector (3,)
         """
         return self.model.opt.gravity
-
     def get_jacobian(self, q):
         J_temp = self.pin_model.computeFrameJacobian(
             np.append(q, [0.0, 0.0]), END_EFF_FRAME_ID
         )
         J = np.zeros([6, 7])
-        J[3:6, :] = J_temp[0:3, :7]
-        J[0:3, :] = J_temp[3:6, :7]
+        J[0:3, :] = J_temp[0:3, :7]
+        J[3:6, :] = J_temp[3:6, :7]
         return J[:, :7]
-
     def get_pose(self, q):
         T_S_F = self.pin_model.framePlacement(
             np.append(q, [0.0, 0.0]), END_EFF_FRAME_ID
         )
         return T_S_F.homogeneous
-
     def get_ee_force_torque(self):
         force_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SENSOR, "ee_force")
         torque_id = mujoco.mj_name2id(
@@ -313,13 +223,9 @@ class FR3Sim:
         force = self.data.sensordata[force_id : force_id + 3]
         torque = self.data.sensordata[torque_id : torque_id + 3]
         return force.copy(), torque.copy()
-
     def close(self):
         if self.render:
             self.viewer.close()
-        self.ros_node.destroy_node()
-        rclpy.shutdown()
-
     def slerp_trajectory(start_pos, end_pos, start_quat, end_quat, steps):
         start_quat = np.asarray(start_quat) / np.linalg.norm(start_quat)
         end_quat = np.asarray(end_quat) / np.linalg.norm(end_quat)
@@ -335,10 +241,8 @@ class FR3Sim:
             traj[i, :3, 3] = positions[i]
             traj[i, 3, :] = [0, 0, 0, 1]
         return traj
-
     def linear_trajectory(start_pos, end_pos, steps):
         return np.linspace(start_pos, end_pos, steps)
-
     def slerp_orientation(self, current_quat, target_quat, steps):
         current_quat = np.asarray(current_quat) / np.linalg.norm(current_quat)
         target_quat = np.asarray(target_quat) / np.linalg.norm(target_quat)
@@ -348,3 +252,57 @@ class FR3Sim:
         slerp = R.slerp(0, 1, key_rots)
         interp_rots = slerp(np.linspace(0, 1, steps))
         return interp_rots.as_quat()
+    def get_site_pose_relative_to_body(self, site_name: str, reference_body: str = "fr3_link0"):
+        """
+        Get the 3D position of a site relative to a reference body frame.
+        Args:
+            site_name (str): Name of the site (e.g., 'cylinder_top_center', 'box_center').
+            reference_body (str): Name of the reference body (default: 'fr3_link0').
+        Returns:
+            np.ndarray: 3D position vector [x, y, z] of the site in the reference body frame.
+        """
+        # Get world position of the site
+        p_world_site = self.get_site_pose(site_name)
+        # Get world orientation and position of the reference body
+        R_ref, p_ref = self.get_body_pose(reference_body)
+        # Express site position in the local frame of reference_body
+        p_rel_site = R_ref.T @ (p_world_site - p_ref)
+        return p_rel_site
+    def get_relative_body_pose(self, target_body: str, reference_body: str = "fr3_link0"):
+        """
+        Compute the 4x4 homogeneous transformation matrix of target_body relative to reference_body.
+        Args:
+            target_body (str): Name of the child body (e.g., 'blue_cylinder', 'target_box_body').
+            reference_body (str): Name of the parent frame (default: 'fr3_link0' for Franka Base).
+        Returns:
+            np.ndarray: 4x4 relative transformation matrix T_ref_target.
+        """
+        # Get world poses (3x3 rotation, 3x1 translation)
+        R_ref, p_ref = self.get_body_pose(reference_body)
+        R_target, p_target = self.get_body_pose(target_body)
+        # Build 4x4 homogeneous matrices in World Frame
+        T_W_ref = np.eye(4)
+        T_W_ref[:3, :3] = R_ref
+        T_W_ref[:3, 3] = p_ref
+        T_W_target = np.eye(4)
+        T_W_target[:3, :3] = R_target
+        T_W_target[:3, 3] = p_target
+        # Relative Pose: T_ref_target = (T_W_ref)^(-1) * T_W_target
+        T_ref_target = np.linalg.inv(T_W_ref) @ T_W_target
+        return T_ref_target
+    def get_site_pose_relative_to_body(self, site_name: str, reference_body: str = "fr3_link0"):
+        """
+        Get the 3D position of a site relative to a reference body frame.
+        Args:
+            site_name (str): Name of the site (e.g., 'cylinder_top_center', 'box_center').
+            reference_body (str): Name of the reference body (default: 'fr3_link0').
+        Returns:
+            np.ndarray: 3D position vector [x, y, z] of the site in the reference body frame.
+        """
+        # Get world position of the site
+        p_world_site = self.get_site_pose(site_name)
+        # Get world orientation and position of the reference body
+        R_ref, p_ref = self.get_body_pose(reference_body)
+        # Express site position in the local frame of reference_body
+        p_rel_site = R_ref.T @ (p_world_site - p_ref)
+        return p_rel_site
