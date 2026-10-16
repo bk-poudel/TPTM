@@ -13,7 +13,7 @@ DT = 0.001
 XML_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "assets",
-    "fr3_on_table.xml",
+    "fr3_on_table_original_demonstration.xml",
 )
 # Multi-keypoint site definitions (5 keypoints per object for 3D pose mapping)
 # Multi-keypoint site definitions (5 keypoints per object for 3D pose mapping)
@@ -55,7 +55,7 @@ OUTPUT_DIR = os.path.join(
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 CSV_PATH = os.path.join(
     OUTPUT_DIR,
-    f"pick_place_{time.strftime('%Y%m%d_%H%M%S')}.csv",
+    "Original_demonstration.csv",
 )
 # =========================================================
 # MODEL INITIALIZATION & KEYPOINT HELPERS
