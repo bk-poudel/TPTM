@@ -27,7 +27,7 @@
         <!-- 2. Blue Cylindrical Object on Table -->
         <!-- Blue Cylindrical Object on Table -->
         <!-- Blue Cylindrical Object on Table -->
-        <body name="blue_cylinder" pos="0.28 0.08 0.88" euler="0.75 0 0">
+        <body name="blue_cylinder" pos="0.28 0.08 0.88" euler="0.745 0 0">
             <joint type="free"/>
             <inertial mass="0.05" pos="0 0 0" fullinertia="0.001 0.001 0.001 0 0 0"/>
             <geom name="blue_cylinder_geom" size="0.025 0.04" type="cylinder" rgba="0.1 0.3 0.9 1" friction="0.95 0.3 0.1" condim="4"/>
@@ -42,7 +42,7 @@
             <!-- Site 5: Top Surface Plane - Corner 4 (-X, +Y) -->
             <site name="cylinder_side_y" pos="-0.015 0.015 0.04" size="0.003" rgba="1 1 0 1"/>
         </body>
-        <body name="target_box_body" pos="-0.15 -0.13 0.87" euler="0 1.57 0">
+        <body name="target_box_body" pos="-0.2 -0.1 0.87" euler="0 0 0">
             <!-- Bottom -->
             <geom name="box_bottom" type="box" pos="0 0 -0.01" size="0.1 0.1 0.01" rgba="1 0 0 0.5" />
             <!-- Left Wall -->
