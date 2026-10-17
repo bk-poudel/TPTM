@@ -7,8 +7,8 @@ from scipy.spatial.transform import Rotation, Slerp
 # CONFIGURATION
 # ============================================================
 DEMO_CSV = Path("demonstrations/Original_demonstration.csv")
-MODEL_FILE = Path("transport_maps.pkl")
-OUTPUT_CSV = Path("demonstrations/Generalized_demonstration.csv")
+MODEL_FILE = Path("./output/transport_maps.pkl")
+OUTPUT_CSV = Path("output/Generalized_trajectory.csv")
 # Transform both commanded target positions and orientations.
 TRANSFORM_TARGET_COLUMNS = True
 XYZ_COLUMNS = ["x", "y", "z"]
@@ -68,16 +68,17 @@ def partial_transform(points, model, alpha):
 # ============================================================
 # ORIENTATION TRANSPORT
 # ============================================================
-def transport_orientations(euler_values, segments, cyl_rot):
+def transport_orientations(
+    euler_values,
+    segments,
+    cyl_rot,
+    box_rot,
+):
     """
-    Transport orientations according to the existing phase policy.
-    approach_cylinder:
-        Gradually apply the cylinder-map rotation.
-    descend_to_grasp, close_gripper, lift, move_to_place,
-    lower_to_place, release:
-        Apply the cylinder-map rotation.
-    retreat:
-        Gradually restore the original orientation.
+    Transport EE orientations using both source and target maps.
+    Source phases use the cylinder-map rotation.
+    Placement phases use the box-map rotation.
+    The move_to_place and retreat phases interpolate smoothly.
     Euler angles use XYZ order and radians.
     """
     euler_values = np.asarray(euler_values, dtype=float)
@@ -85,50 +86,62 @@ def transport_orientations(euler_values, segments, cyl_rot):
         raise ValueError("Expected an N x 3 array of Euler angles.")
     if not np.isfinite(euler_values).all():
         raise ValueError("Non-finite Euler angles found.")
+    segments = np.asarray(segments, dtype=str)
+    if len(segments) != len(euler_values):
+        raise ValueError("segments and orientations must have equal lengths.")
     original = Rotation.from_euler("xyz", euler_values)
-    count = len(euler_values)
-    # Store individual rotations in a mutable Python list.
-    result = [original[i] for i in range(count)]
-    # --------------------------------------------------------
-    # Phase 1: approach cylinder
-    # --------------------------------------------------------
+    result = [original[i] for i in range(len(original))]
+    def interpolate_rotation(start, end, alpha):
+        """Spherical interpolation between two orientations."""
+        slerp = Slerp(
+            [0.0, 1.0],
+            Rotation.concatenate([start, end]),
+        )
+        return slerp([float(alpha)])[0]
+    # 1. Approach: gradually apply the cylinder transformation.
     idx = np.flatnonzero(segments == "approach_cylinder")
-    alpha = np.linspace(0.0, 1.0, len(idx))
-    for i, a in zip(idx, alpha):
+    for alpha, i in zip(
+        np.linspace(0.0, 1.0, len(idx)), idx
+    ):
         partial_rot = Rotation.from_rotvec(
-            a * cyl_rot.as_rotvec()
+            alpha * cyl_rot.as_rotvec()
         )
         result[i] = partial_rot * original[i]
-    # --------------------------------------------------------
-    # Phases 2-4: grasp, lift, transport, lower, release
-    # --------------------------------------------------------
-    full_rotation_phases = [
+    # 2. Grasp and lift: maintain the source-object transformation.
+    for phase in [
         "descend_to_grasp",
         "close_gripper",
         "lift",
-        "move_to_place",
-        "lower_to_place",
-        "release",
-    ]
-    for phase in full_rotation_phases:
-        idx = np.flatnonzero(segments == phase)
-        for i in idx:
+    ]:
+        for i in np.flatnonzero(segments == phase):
             result[i] = cyl_rot * original[i]
-    # --------------------------------------------------------
-    # Phase 5: retreat
-    # --------------------------------------------------------
-    idx = np.flatnonzero(segments == "retreat")
-    alpha = np.linspace(0.0, 1.0, len(idx))
-    for i, a in zip(idx, alpha):
-        transported = cyl_rot * original[i]
-        interpolator = Slerp(
-            [0.0, 1.0],
-            Rotation.concatenate([
-                transported,
-                original[i],
-            ]),
+    # 3. Transport: transition from source frame to target frame.
+    idx = np.flatnonzero(segments == "move_to_place")
+    for alpha, i in zip(
+        np.linspace(0.0, 1.0, len(idx)), idx
+    ):
+        source_orientation = cyl_rot * original[i]
+        target_orientation = box_rot * original[i]
+        result[i] = interpolate_rotation(
+            source_orientation,
+            target_orientation,
+            alpha,
         )
-        result[i] = interpolator([a])[0]
+    # 4. Lower and release: follow the target-box transformation.
+    for phase in ["lower_to_place", "release"]:
+        for i in np.flatnonzero(segments == phase):
+            result[i] = box_rot * original[i]
+    # 5. Retreat: smoothly restore the original orientation.
+    idx = np.flatnonzero(segments == "retreat")
+    for alpha, i in zip(
+        np.linspace(0.0, 1.0, len(idx)), idx
+    ):
+        target_orientation = box_rot * original[i]
+        result[i] = interpolate_rotation(
+            target_orientation,
+            original[i],
+            alpha,
+        )
     return Rotation.concatenate(result)
 # ============================================================
 # LOAD AND VALIDATE DEMONSTRATION
@@ -163,6 +176,7 @@ if not np.isfinite(original_euler).all():
 generalized_xyz = original_xyz.copy()
 # Rigid cylinder rotation used by the existing phase policy.
 cyl_rot = map_rotation(cylinder_map)
+box_rot = map_rotation(box_map)
 # ============================================================
 # PHASE 1: APPROACH CYLINDER
 # ============================================================
@@ -234,6 +248,7 @@ generalized_rot = transport_orientations(
     original_euler,
     segments,
     cyl_rot,
+    box_rot
 )
 # Save the generalized end-effector pose.
 df[EE_POS_COLS] = generalized_xyz
@@ -295,6 +310,7 @@ if TRANSFORM_TARGET_COLUMNS:
         original_target_euler,
         segments,
         cyl_rot,
+        box_rot
     )
     df[TARGET_POS_COLS] = generalized_target_xyz
     df[TARGET_EULER_COLS] = (

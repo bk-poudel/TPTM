@@ -8,10 +8,10 @@ from sklearn.gaussian_process.kernels import ConstantKernel, RBF
 # --------------------------------------------------
 # CONFIGURATION
 # --------------------------------------------------
-INPUT_CSV = Path("keypoints_pairs.csv")
+INPUT_CSV = Path("./keypoints/keypoints_pairs.csv")
 REPORT_CSV = Path("map_fit_report.csv")
-PREDICTIONS_CSV = Path("keypoint_predictions.csv")
-MODEL_FILE = Path("transport_maps.pkl")
+PREDICTIONS_CSV = Path("./output/keypoint_predictions.csv")
+MODEL_FILE = Path("./output/transport_maps.pkl")
 RBF_REGULARIZATION = 1e-8
 GP_NOISE = 1e-8
 # --------------------------------------------------

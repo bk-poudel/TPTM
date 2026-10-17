@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 original_path = Path("demonstrations/Original_demonstration.csv")
-generalized_path = Path("demonstrations/Generalized_demonstration.csv")
+generalized_path = Path("output/Generalized_trajectory.csv")
 original = pd.read_csv(original_path)
 generalized = pd.read_csv(generalized_path)
 xyz = ["ee_x", "ee_y", "ee_z"]

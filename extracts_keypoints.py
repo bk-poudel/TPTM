@@ -1,13 +1,26 @@
 import csv
 from pathlib import Path
 import numpy as np
+import argparse
 # --------------------------------------------------
 # CONFIGURATION
 # --------------------------------------------------
-DEMO_CSV = Path(
-    "/Users/bibek/TPTm/demonstrations/pick_place_20261016_163124.csv"
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--demo_csv",
+    type=Path,
+    required=True,
+    help="Path to the demonstration CSV file",
 )
-OUTPUT_CSV = Path("transformed_keypoints.csv")
+parser.add_argument(
+    "--output_csv",
+    type=Path,
+    default=Path("transformed_keypoints.csv"),
+    help="Path to save the extracted keypoints CSV",
+)
+args = parser.parse_args()
+DEMO_CSV = args.demo_csv
+OUTPUT_CSV = args.output_csv
 def read_first_row(csv_path):
     with csv_path.open("r", newline="") as f:
         reader = csv.DictReader(f)
@@ -27,14 +40,15 @@ def read_keypoints(row, prefix, count=5):
 # --------------------------------------------------
 # EXTRACT ORIGINAL KEYPOINTS
 # --------------------------------------------------
+if not DEMO_CSV.is_file():
+    raise FileNotFoundError(f"Demo CSV not found: {DEMO_CSV}")
 row = read_first_row(DEMO_CSV)
-# Original cylinder keypoints
 cylinder_points = read_keypoints(row, "src")
-# Original box keypoints
 box_points = read_keypoints(row, "tgt")
 # --------------------------------------------------
 # SAVE TO CSV
 # --------------------------------------------------
+OUTPUT_CSV.parent.mkdir(parents=True, exist_ok=True)
 columns = ["object", "point_id", "x", "y", "z"]
 with OUTPUT_CSV.open("w", newline="") as f:
     writer = csv.DictWriter(f, fieldnames=columns)

@@ -14,7 +14,7 @@ DT = 0.001
 BASE_DIR = Path(__file__).resolve().parent
 XML_PATH = BASE_DIR / "assets" / "fr3_on_table.xml"
 TRAJECTORY_PATH = (
-    BASE_DIR / "demonstrations" / "Generalized_demonstration.csv"
+    BASE_DIR / "output" / "Generalized_trajectory.csv"
 )
 OUTPUT_DIR = BASE_DIR / "demonstrations"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

@@ -5,16 +5,34 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 from scipy.spatial.transform import Rotation, Slerp
-# =========================================================
-# CONFIGURATION
-# =========================================================
+from pathlib import Path
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--scene_file",
+    type=str,
+    required=True,
+    help="Path to the MuJoCo scene XML file"
+)
+parser.add_argument(
+    "--output_file",
+    type=Path,
+    default=Path("demonstrations/Original_demonstration.csv"),
+    help="Path to save the demonstration CSV"
+)
+# Parse arguments once, after defining all arguments
+args = parser.parse_args()
+SCENEFILE = args.scene_file
+OUTPUT_FILE = args.output_file
 DT = 0.001
 # XML file path
 XML_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "assets",
-    "fr3_on_table_original_demonstration.xml",
+    SCENEFILE,
 )
+print(f"Scene file: {XML_PATH}")
+print(f"Output CSV: {OUTPUT_FILE.resolve()}")
 # Multi-keypoint site definitions (5 keypoints per object for 3D pose mapping)
 # Multi-keypoint site definitions (5 keypoints per object for 3D pose mapping)
 CYLINDER_SITES = [
@@ -34,8 +52,8 @@ PLACE_SITES = [
 # End-effector site name
 EE_SITE = "center"
 # Pick-and-place geometry
-APPROACH_HEIGHT = 0.12
-LIFT_HEIGHT = 0.17
+APPROACH_HEIGHT = 0.18
+LIFT_HEIGHT = 0.2
 GRASP_OFFSET = np.array([0.0, 0.0, -0.025])
 PLACE_OFFSET = np.array([0.0, 0.0, 0.06])
 # Gripper configuration
@@ -55,7 +73,7 @@ OUTPUT_DIR = os.path.join(
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 CSV_PATH = os.path.join(
     OUTPUT_DIR,
-    "Original_demonstration.csv",
+    OUTPUT_FILE,
 )
 # =========================================================
 # MODEL INITIALIZATION & KEYPOINT HELPERS

@@ -3,9 +3,9 @@ from pathlib import Path
 # --------------------------------------------------
 # CONFIGURATION
 # --------------------------------------------------
-ORIGINAL_CSV = Path("original_keypoints.csv")
-TRANSFORMED_CSV = Path("transformed_keypoints.csv")
-OUTPUT_CSV = Path("keypoints_pairs.csv")
+ORIGINAL_CSV = Path("./keypoints/original_keypoints.csv")
+TRANSFORMED_CSV = Path("./keypoints/transformed_keypoints.csv")
+OUTPUT_CSV = Path("./keypoints/keypoints_pairs.csv")
 def load_keypoints(path):
     df = pd.read_csv(path)
     required = {"object", "point_id", "x", "y", "z"}
