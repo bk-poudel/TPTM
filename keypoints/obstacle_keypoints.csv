@@ -1,0 +1,16 @@
+object,point_id,x,y,z
+obstacle,center,0.05,-0.01,1.0
+obstacle,pos_x_center,0.07,-0.01,1.0
+obstacle,neg_x_center,0.030000000000000002,-0.01,1.0
+obstacle,pos_y_center,0.05,0.13999999999999999,1.0
+obstacle,neg_y_center,0.05,-0.16,1.0
+obstacle,pos_z_center,0.05,-0.01,1.12
+obstacle,neg_z_center,0.05,-0.01,0.88
+obstacle,corner_1,0.07,0.13999999999999999,1.12
+obstacle,corner_2,0.07,0.13999999999999999,0.88
+obstacle,corner_3,0.07,-0.16,1.12
+obstacle,corner_4,0.07,-0.16,0.88
+obstacle,corner_5,0.030000000000000002,0.13999999999999999,1.12
+obstacle,corner_6,0.030000000000000002,0.13999999999999999,0.88
+obstacle,corner_7,0.030000000000000002,-0.16,1.12
+obstacle,corner_8,0.030000000000000002,-0.16,0.88

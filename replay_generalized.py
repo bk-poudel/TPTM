@@ -14,7 +14,7 @@ DT = 0.001
 BASE_DIR = Path(__file__).resolve().parent
 XML_PATH = BASE_DIR / "assets" / "fr3_on_table.xml"
 TRAJECTORY_PATH = (
-    BASE_DIR / "output" / "Generalized_trajectory.csv"
+    BASE_DIR / "output" / "Generalized_trajectory_avoiding_obstacle.csv"
 )
 OUTPUT_DIR = BASE_DIR / "demonstrations"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -23,8 +23,8 @@ LOG_PATH = OUTPUT_DIR / (
 )
 EE_SITE = "center"
 # Match the original demonstration controller.
-KP_POS = 600.0
-KD_POS = 80.0
+KP_POS = 400.0
+KD_POS = 100.0
 KP_ROT = 40.0
 KD_ROT = 5.0
 MAX_TORQUE = 35.0

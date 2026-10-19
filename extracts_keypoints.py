@@ -1,73 +1,61 @@
-import csv
-from pathlib import Path
-import numpy as np
 import argparse
-# --------------------------------------------------
-# CONFIGURATION
-# --------------------------------------------------
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--demo_csv",
-    type=Path,
-    required=True,
-    help="Path to the demonstration CSV file",
-)
-parser.add_argument(
-    "--output_csv",
-    type=Path,
-    default=Path("transformed_keypoints.csv"),
-    help="Path to save the extracted keypoints CSV",
-)
-args = parser.parse_args()
-DEMO_CSV = args.demo_csv
-OUTPUT_CSV = args.output_csv
-def read_first_row(csv_path):
-    with csv_path.open("r", newline="") as f:
-        reader = csv.DictReader(f)
-        row = next(reader, None)
-    if row is None:
-        raise ValueError(f"No data rows found in {csv_path}")
-    return row
-def read_keypoints(row, prefix, count=5):
-    points = []
-    for i in range(count):
-        keys = [f"{prefix}_kp{i}_{axis}" for axis in "xyz"]
-        missing = [key for key in keys if key not in row]
-        if missing:
-            raise ValueError(f"Missing columns: {missing}")
-        points.append([float(row[key]) for key in keys])
-    return np.asarray(points, dtype=float)
-# --------------------------------------------------
-# EXTRACT ORIGINAL KEYPOINTS
-# --------------------------------------------------
-if not DEMO_CSV.is_file():
-    raise FileNotFoundError(f"Demo CSV not found: {DEMO_CSV}")
-row = read_first_row(DEMO_CSV)
-cylinder_points = read_keypoints(row, "src")
-box_points = read_keypoints(row, "tgt")
-# --------------------------------------------------
-# SAVE TO CSV
-# --------------------------------------------------
-OUTPUT_CSV.parent.mkdir(parents=True, exist_ok=True)
-columns = ["object", "point_id", "x", "y", "z"]
-with OUTPUT_CSV.open("w", newline="") as f:
-    writer = csv.DictWriter(f, fieldnames=columns)
-    writer.writeheader()
-    for obj, points in [
-        ("cylinder", cylinder_points),
-        ("box", box_points),
-    ]:
-        for i, point in enumerate(points):
-            writer.writerow({
-                "object": obj,
-                "point_id": f"kp{i}",
-                "x": point[0],
-                "y": point[1],
-                "z": point[2],
+from pathlib import Path
+import mujoco
+import pandas as pd
+def get_site_position(model, data, site_name):
+    site_id = mujoco.mj_name2id(
+        model, mujoco.mjtObj.mjOBJ_SITE, site_name
+    )
+    if site_id == -1:
+        raise ValueError(
+            f"Site '{site_name}' not found in the XML scene."
+        )
+    return data.site_xpos[site_id].copy()
+def main():
+    parser = argparse.ArgumentParser(
+        description="Extract object keypoints from a MuJoCo XML scene."
+    )
+    parser.add_argument("--xml", type=Path, required=True)
+    parser.add_argument("--output_csv", type=Path, required=True)
+    args = parser.parse_args()
+    if not args.xml.is_file():
+        raise FileNotFoundError(f"XML file not found: {args.xml}")
+    model = mujoco.MjModel.from_xml_path(str(args.xml))
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    # Five corresponding sites for the cylinder.
+    site_groups = {
+        "cylinder": [
+            ("kp0", "cylinder_center"),
+            ("kp1", "cylinder_top"),
+            ("kp2", "cylinder_bottom"),
+            ("kp3", "cylinder_side_x"),
+            ("kp4", "cylinder_side_y"),
+        ],
+        # Five corresponding sites for the target box.
+        "box": [
+            ("kp0", "box_center"),
+            ("kp1", "box_corner_front_left"),
+            ("kp2", "box_corner_front_right"),
+            ("kp3", "box_corner_back_left"),
+            ("kp4", "box_corner_back_right"),
+        ],
+    }
+    rows = []
+    for obj_name, sites in site_groups.items():
+        for point_id, site_name in sites:
+            xyz = get_site_position(model, data, site_name)
+            rows.append({
+                "object": obj_name,
+                "point_id": point_id,
+                "x": float(xyz[0]),
+                "y": float(xyz[1]),
+                "z": float(xyz[2]),
             })
-print(f"Saved original keypoints to: {OUTPUT_CSV.resolve()}")
-print(f"Total keypoints: {len(cylinder_points) + len(box_points)}")
-print("\nOriginal cylinder keypoints:")
-print(cylinder_points)
-print("\nOriginal box keypoints:")
-print(box_points)
+    args.output_csv.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(args.output_csv, index=False)
+    print(f"Scene: {args.xml}")
+    print(f"Saved keypoints: {args.output_csv}")
+    print(pd.DataFrame(rows).to_string(index=False))
+if __name__ == "__main__":
+    main()

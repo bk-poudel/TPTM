@@ -26,11 +26,7 @@ SCENEFILE = args.scene_file
 OUTPUT_FILE = args.output_file
 DT = 0.001
 # XML file path
-XML_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "assets",
-    SCENEFILE,
-)
+XML_PATH = os.path.abspath(SCENEFILE)
 print(f"Scene file: {XML_PATH}")
 print(f"Output CSV: {OUTPUT_FILE.resolve()}")
 # Multi-keypoint site definitions (5 keypoints per object for 3D pose mapping)
@@ -61,7 +57,7 @@ OPEN_GRIPPER = 0.035
 CLOSED_GRIPPER = 0.0
 # Cartesian impedance gains
 KP_POS = 600.0
-KD_POS = 80.0
+KD_POS = 100.0
 KP_ROT = 40.0
 KD_ROT = 5.0
 MAX_TORQUE = 35.0
@@ -71,10 +67,7 @@ OUTPUT_DIR = os.path.join(
     "demonstrations",
 )
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-CSV_PATH = os.path.join(
-    OUTPUT_DIR,
-    OUTPUT_FILE,
-)
+CSV_PATH = os.path.abspath(OUTPUT_FILE)
 # =========================================================
 # MODEL INITIALIZATION & KEYPOINT HELPERS
 # =========================================================
@@ -288,10 +281,10 @@ def main():
                 sequence = [
                     ("approach_cylinder", approach_pos, 5.0, OPEN_GRIPPER),
                     ("descend_to_grasp", grasp_pos, 3.0, OPEN_GRIPPER),
-                    ("close_gripper", grasp_pos, 1.0, CLOSED_GRIPPER),
-                    ("lift", lift_pos, 2.0, CLOSED_GRIPPER),
-                    ("move_to_place", place_approach_pos, 5.0, CLOSED_GRIPPER),
-                    ("lower_to_place", place_pos, 2.0, CLOSED_GRIPPER),
+                    ("close_gripper", grasp_pos, 2.0, CLOSED_GRIPPER),
+                    ("lift", lift_pos, 6.0, CLOSED_GRIPPER),
+                    ("move_to_place", place_approach_pos, 10.0, CLOSED_GRIPPER),
+                    ("lower_to_place", place_pos, 5.0, CLOSED_GRIPPER),
                     ("release", place_pos, 1.0, OPEN_GRIPPER),
                     ("retreat", place_approach_pos, 2.0, OPEN_GRIPPER),
                 ]
